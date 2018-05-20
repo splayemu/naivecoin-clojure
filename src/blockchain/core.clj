@@ -1,15 +1,21 @@
 (ns blockchain.core
-  (:require [digest]
-            [ring.middleware.json :refer [wrap-json-response wrap-json-body]]
-            [ring.middleware.params :as params]
-            [clj-time.core :as t]
-            [environ.core :as e]
-            [gniazdo.core :as ws]
-            [clojure.edn :as edn])
-  (:use [compojure.route :only [files not-found]]
-        [compojure.handler :only [site]] ; form, query params decode; cookie; session, etc
-        [compojure.core :only [defroutes GET POST DELETE ANY context]]
-        org.httpkit.server)
+  (:require
+   [digest]
+   [ring.middleware.json :refer [wrap-json-response wrap-json-body]]
+   [ring.middleware.params :as params]
+   [clj-time.core :as t]
+   [environ.core :as e]
+   [gniazdo.core :as ws]
+   [clojure.edn :as edn]
+   [clojure.core.async
+    :as a
+    :refer [>! <! >!! <!! go chan buffer close! thread
+            alts! alts!! timeout]])
+  (:use
+   [compojure.route :only [files not-found]]
+   [compojure.handler :only [site]] ; form, query params decode; cookie; session, etc
+   [compojure.core :only [defroutes GET POST DELETE ANY context]]
+   org.httpkit.server)
   (:gen-class))
 
 (defn env-peers [peer-str]
@@ -54,10 +60,20 @@
   (println (str "write-channel: " message))
   (send! ch message))
 
+(defn write-local-channel [ch message]
+  (println (str "write-local-channel: " message))
+  (>!! ch message))
+
 (defn write [type socket message]
-  (if (= type :socket-type/client)
+  (cond
+    (= type :socket-type/client)
     (write-client socket message)
-    (write-channel socket message)))
+
+    (= type :socket-type/server)
+    (write-channel socket message)
+
+    (= type :socket-type/local)
+    (write-local-channel socket message)))
 
 (defn broadcast [message]
   (doseq [ws (vals @sockets)]
@@ -196,12 +212,27 @@
                     :error)]
      (println (str "ws-message-handler: " response)))))
 
+
+;; I want to take this handler, with an input chan and output chan
+;; and
+(comment
+  (let [c1 (chan)
+        c2 (chan)
+        handle (ws-message-handler :socket-type/local c2)]
+    (handle (prn-str {:type :message-type/QUERY-LATEST})))
+
+  (let [name "Lauren"]
+    (str name " Mackey"))
+
+  )
+
+
 (defn handler [request]
   (with-channel request channel
     (swap! channels conj channel)
     (write-channel channel (prn-str query-chain-length-msg))
     (on-close channel (fn [status] (println "channel closed: " status)))
-    (on-receive channel (ws-message-handler :socket-type/channel channel))))
+    (on-receive channel (ws-message-handler :socket-type/server channel))))
 
 (defn init-p2p-server
   ([] (init-p2p-server p2p-port))
