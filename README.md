@@ -1,14 +1,3 @@
-# blockchain
+# Naivecoin Clojure
 
-A Clojure library designed to ... well, that part is up to you.
-
-## Usage
-
-FIXME
-
-## License
-
-Copyright © 2017 FIXME
-
-Distributed under the Eclipse Public License either version 1.0 or (at
-your option) any later version.
+Rewrite of the Javascript naivecoin based off of this (blog post)[https://medium.com/@lhartikk/a-blockchain-in-200-lines-of-code-963cc1cc0e54].
